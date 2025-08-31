@@ -320,8 +320,12 @@ class VoucherProcessorGUI:
     
     def browse_template(self):
         """Browse for template DOCX file"""
+        # Get user's home directory
+        home_dir = os.path.expanduser("~")
+        
         file_path = filedialog.askopenfilename(
             title="Select Template File",
+            initialdir=home_dir,
             filetypes=[("Word Documents", "*.docx"), ("All Files", "*.*")]
         )
         if file_path:
@@ -331,8 +335,12 @@ class VoucherProcessorGUI:
     
     def browse_csv(self):
         """Browse for CSV file"""
+        # Get user's home directory
+        home_dir = os.path.expanduser("~")
+        
         file_path = filedialog.askopenfilename(
             title="Select CSV File",
+            initialdir=home_dir,
             filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")]
         )
         if file_path:
@@ -698,9 +706,13 @@ class VoucherProcessorGUI:
             messagebox.showerror("Error", "PDF file not found. Please process files first.")
             return
         
+        # Get user's home directory
+        home_dir = os.path.expanduser("~")
+        
         # Ask user where to save the file
         save_path = filedialog.asksaveasfilename(
             title="Save PDF As",
+            initialdir=home_dir,
             defaultextension=".pdf",
             filetypes=[("PDF Files", "*.pdf"), ("All Files", "*.*")],
             initialfile=f"vouchers_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"

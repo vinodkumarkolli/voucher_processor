@@ -126,6 +126,8 @@ Application Directory/
 ├── converter.py            # Processing engine
 ├── requirements.txt        # Python dependencies
 ├── setup.py               # Executable build script
+├── build.sh               # Universal build script
+├── build_appimage.py      # AppImage build script for Linux
 ├── README.md              # This file
 ├── processing_history.xlsx # Processing history (auto-created)
 ├── filesIn/               # Input files (auto-created)
@@ -148,6 +150,32 @@ Application Directory/
 2. Copy the entire `build/` directory to target system
 3. Install LibreOffice on target system
 4. Run the executable from the build directory
+
+### Method 3: AppImage for Linux (Fedora/Ubuntu)
+For Fedora and Ubuntu Linux distributions, you can create an AppImage package:
+
+1. Install prerequisites:
+   ```bash
+   # Ubuntu/Debian
+   sudo apt-get update
+   sudo apt-get install python3 python3-pip wget desktop-file-utils libfuse2
+   
+   # Fedora
+   sudo dnf install python3 python3-pip wget desktop-file-utils fuse-libs
+   ```
+
+2. Build the AppImage:
+   ```bash
+   python build_appimage.py
+   ```
+
+3. The AppImage will be created automatically as `VoucherProcessor-x86_64.AppImage`
+
+4. Make it executable and run:
+   ```bash
+   chmod +x VoucherProcessor-x86_64.AppImage
+   ./VoucherProcessor-x86_64.AppImage
+   ```
 
 ### Cross-Platform Notes
 - **Windows**: Executable will have `.exe` extension
@@ -177,6 +205,17 @@ Application Directory/
 5. **GUI not responsive during processing**
    - This is normal; processing runs in background thread
    - Monitor status messages for progress updates
+
+### AppImage Specific Issues
+
+1. **"Cannot open AppImage"**
+   - Ensure the AppImage file has execute permissions: `chmod +x VoucherProcessor-x86_64.AppImage`
+
+2. **"FUSE error"**
+   - Install FUSE libraries: `sudo apt-get install libfuse2` (Ubuntu) or `sudo dnf install fuse-libs` (Fedora)
+
+3. **"Missing dependencies"**
+   - The AppImage should be self-contained, but LibreOffice must be installed separately
 
 ### Performance Notes
 - Processing time depends on number of records and system performance
@@ -219,3 +258,4 @@ The application is modular and can be extended:
   - PDF generation
   - History tracking
   - Standalone deployment support
+  - AppImage support for Linux

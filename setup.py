@@ -12,15 +12,19 @@ import os
 # Dependencies are automatically detected, but some modules may be missed
 build_exe_options = {
     "packages": [
-        "tkinter", "pandas", "openpyxl", "xml", "zipfile", 
-        "tempfile", "shutil", "threading", "datetime", "pathlib"
+        "tkinter", "pandas", "openpyxl", "xml", "zipfile",
+        "tempfile", "shutil", "threading", "datetime", "pathlib", "lxml"
     ],
-    "excludes": ["matplotlib", "numpy", "scipy", "IPython", "jupyter"],
+    "excludes": [
+        "matplotlib", "numpy", "scipy", "IPython", "jupyter", "PIL",
+        "cssselect", "defusedxml", "pyarrow", "pytest", "annotationlib"
+    ],
     "include_files": [
         ("converter.py", "converter.py"),
     ],
     "zip_include_packages": ["*"],
     "zip_exclude_packages": [],
+    "optimize": 1,
 }
 
 # GUI applications require a different base on Windows
