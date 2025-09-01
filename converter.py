@@ -2,11 +2,11 @@
 # -*- coding: utf-8 -*-
 
 """
-Direct DOCX Processor
+Enhanced DOCX Processor
 
-This script manipulates DOCX files at the ZIP/XML level to ensure
-reliable placeholder replacement while preserving all formatting,
-images, and layout exactly as in the template.
+This script processes DOCX files using lxml-based XML manipulation
+for reliable placeholder replacement while preserving as much
+formatting as possible, including images and layout.
 """
 
 import pandas as pd
@@ -15,7 +15,9 @@ import math
 import zipfile
 import tempfile
 import shutil
-from xml.etree import ElementTree as ET
+import lxml.etree as ET
+from docx import Document
+from docx.shared import Inches
 
 
 def read_csv_data(csv_path):
@@ -70,23 +72,8 @@ def create_replacement_mapping(df, page_start_index, cells_per_page):
         print(f"    Cell {cell_number}: [sno_{cell_number}] -> (empty), [code_{cell_number}] -> (empty)")
     
     return replacements
-
-
-def replace_text_in_xml(xml_content, replacements):
-    """Replace placeholders in XML content"""
-    replacements_made = 0
-    
-    for placeholder, value in replacements.items():
-        if placeholder in xml_content:
-            xml_content = xml_content.replace(placeholder, str(value))
-            replacements_made += 1
-            print(f"      Replaced '{placeholder}' with '{value}'")
-    
-    return xml_content, replacements_made
-
-
 def process_single_page_docx(template_path, output_path, replacements):
-    """Process a single DOCX file with replacements"""
+    """Process a single DOCX file with replacements using lxml-based XML manipulation"""
     
     # Create temporary directory
     temp_dir = tempfile.mkdtemp()
@@ -110,8 +97,51 @@ def process_single_page_docx(template_path, output_path, replacements):
             with open(document_xml_path, 'r', encoding='utf-8') as f:
                 xml_content = f.read()
             
-            # Replace placeholders
-            modified_xml, replacements_made = replace_text_in_xml(xml_content, replacements)
+            # Define namespaces for lxml
+            namespaces = {
+                'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+                'wp': 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing',
+                'a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
+                'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+                'm': 'http://schemas.openxmlformats.org/officeDocument/2006/math',
+                've': 'http://schemas.openxmlformats.org/markup-compatibility/2006',
+                'o': 'urn:schemas-microsoft-com:office:office',
+                'v': 'urn:schemas-microsoft-com:vml',
+                'w10': 'urn:schemas-microsoft-com:office:word',
+                'mc': 'http://schemas.openxmlformats.org/markup-compatibility/2006',
+                'wps': 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape',
+                'pic': 'http://schemas.openxmlformats.org/drawingml/2006/picture'
+            }
+            
+            parser = ET.XMLParser(remove_blank_text=True)
+            root = ET.fromstring(xml_content.encode('utf-8'), parser=parser)
+            
+            replacements_made = 0
+            
+            # Find all text elements and replace placeholders while preserving formatting
+            # Focus on w:t (regular text) and a:t (drawing text) elements
+            text_elements = root.xpath('.//w:t', namespaces=namespaces) + root.xpath('.//a:t', namespaces=namespaces)
+            
+            for elem in text_elements:
+                if elem.text:
+                    for placeholder, value in replacements.items():
+                        if placeholder in elem.text:
+                            elem.text = elem.text.replace(placeholder, str(value))
+                            replacements_made += 1
+                            print(f"      Replaced '{placeholder}' with '{value}'")
+            
+            # Also check text within v:textbox elements (legacy textboxes)
+            v_textbox_elements = root.xpath('.//v:textbox//w:t', namespaces=namespaces)
+            for elem in v_textbox_elements:
+                if elem.text:
+                    for placeholder, value in replacements.items():
+                        if placeholder in elem.text:
+                            elem.text = elem.text.replace(placeholder, str(value))
+                            replacements_made += 1
+                            print(f"      Replaced '{placeholder}' with '{value}' in VML textbox")
+            
+            # Convert back to string with proper XML declaration
+            modified_xml = ET.tostring(root, encoding='utf-8', xml_declaration=True, pretty_print=True).decode('utf-8')
             
             # Write back the modified XML
             with open(document_xml_path, 'w', encoding='utf-8') as f:
@@ -132,6 +162,12 @@ def process_single_page_docx(template_path, output_path, replacements):
         
         return replacements_made
     
+    except Exception as e:
+        print(f"Error in fallback processing: {e}")
+        import traceback
+        traceback.print_exc()
+        return 0
+    
     finally:
         # Clean up temporary directory
         try:
@@ -141,7 +177,7 @@ def process_single_page_docx(template_path, output_path, replacements):
 
 
 def combine_docx_files(file_paths, output_path):
-    """Combine multiple DOCX files into one"""
+    """Combine multiple DOCX files into one while preserving all formatting using lxml"""
     
     if not file_paths:
         return False
@@ -162,9 +198,25 @@ def combine_docx_files(file_paths, output_path):
         with open(base_doc_xml_path, 'r', encoding='utf-8') as f:
             base_xml_content = f.read()
         
-        # Parse base XML
-        root = ET.fromstring(base_xml_content)
-        body = root.find('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}body')
+        # Parse base XML with namespace registration
+        namespaces = {
+            'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+            'wp': 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing',
+            'a': 'http://schemas.openxmlformats.org/drawingml/2006/main',
+            'r': 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+            'm': 'http://schemas.openxmlformats.org/officeDocument/2006/math',
+            've': 'http://schemas.openxmlformats.org/markup-compatibility/2006',
+            'o': 'urn:schemas-microsoft-com:office:office',
+            'v': 'urn:schemas-microsoft-com:vml',
+            'w10': 'urn:schemas-microsoft-com:office:word',
+            'mc': 'http://schemas.openxmlformats.org/markup-compatibility/2006',
+            'wps': 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape',
+            'pic': 'http://schemas.openxmlformats.org/drawingml/2006/picture'
+        }
+        
+        parser = ET.XMLParser(remove_blank_text=True)
+        root = ET.fromstring(base_xml_content.encode('utf-8'), parser=parser)
+        body = root.xpath('.//w:body', namespaces=namespaces)[0]
         
         # Add content from subsequent documents
         for i in range(1, len(file_paths)):
@@ -181,8 +233,8 @@ def combine_docx_files(file_paths, output_path):
                 current_xml_content = f.read()
             
             # Parse current XML and get body content
-            current_root = ET.fromstring(current_xml_content)
-            current_body = current_root.find('.//{http://schemas.openxmlformats.org/wordprocessingml/2006/main}body')
+            current_root = ET.fromstring(current_xml_content.encode('utf-8'), parser=parser)
+            current_body = current_root.xpath('.//w:body', namespaces=namespaces)[0]
             
             # Add page break
             page_break = ET.Element('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}p')
@@ -191,15 +243,17 @@ def combine_docx_files(file_paths, output_path):
             page_break_elem.set('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}type', 'page')
             body.append(page_break)
             
-            # Add all content from current body (except sectPr)
+            # Add all content from current body (except sectPr which contains section properties)
             for element in current_body:
+                # Skip section properties as they define page layout and should only come from the last section
                 if not element.tag.endswith('}sectPr'):
+                    # Append the element directly
                     body.append(element)
         
-        # Write modified document.xml back
-        modified_xml = ET.tostring(root, encoding='unicode')
+        # Write modified document.xml back with proper formatting
+        modified_xml = ET.tostring(root, encoding='utf-8', xml_declaration=True, pretty_print=True).decode('utf-8')
+        
         with open(base_doc_xml_path, 'w', encoding='utf-8') as f:
-            f.write('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n')
             f.write(modified_xml)
         
         # Create final DOCX file
@@ -214,6 +268,8 @@ def combine_docx_files(file_paths, output_path):
     
     except Exception as e:
         print(f"Error combining DOCX files: {e}")
+        import traceback
+        traceback.print_exc()
         return False
     
     finally:
@@ -227,7 +283,6 @@ def combine_docx_files(file_paths, output_path):
 def count_placeholders_in_template(template_path):
     """Count the number of unique placeholders in the template"""
     try:
-        # Create temporary directory
         temp_dir = tempfile.mkdtemp()
         
         try:
@@ -243,7 +298,7 @@ def count_placeholders_in_template(template_path):
             with open(document_xml_path, 'r', encoding='utf-8') as f:
                 xml_content = f.read()
             
-            # Count unique placeholders
+            # Count unique placeholders using regex to catch all occurrences
             import re
             code_placeholders = set(re.findall(r'\[code_\d+\]', xml_content))
             sno_placeholders = set(re.findall(r'\[sno_\d+\]', xml_content))
@@ -252,6 +307,14 @@ def count_placeholders_in_template(template_path):
             # Since each cell has two placeholders ([code_n] and [sno_n]),
             # divide by 2 to get the number of cells
             cells_per_page = len(unique_placeholders) // 2
+            
+            # If no placeholders found with regex, try a more comprehensive search
+            if cells_per_page == 0:
+                # Look for any text that looks like a placeholder
+                all_placeholders = set(re.findall(r'\[[^\]]*\d+[^\]]*\]', xml_content))
+                code_like = set([p for p in all_placeholders if 'code' in p])
+                sno_like = set([p for p in all_placeholders if 'sno' in p or 'serial' in p.lower()])
+                cells_per_page = max(len(code_like), len(sno_like))
             
             print(f"Detected {cells_per_page} cells per page in template")
             return cells_per_page

@@ -2,3 +2,5 @@ build/*
 AppDir/*
 appimagetool*
 linuxdeploy*
+filesIn/*
+fileOut/*
