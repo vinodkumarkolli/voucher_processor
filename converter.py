@@ -38,7 +38,7 @@ def read_csv_data(csv_path):
         return None
 
 
-def create_replacement_mapping(df, page_start_index, cells_per_page=14):
+def create_replacement_mapping(df, page_start_index, cells_per_page):
     """Create mapping of placeholders to actual values for a page"""
     replacements = {}
     
@@ -224,6 +224,50 @@ def combine_docx_files(file_paths, output_path):
             pass
 
 
+def count_placeholders_in_template(template_path):
+    """Count the number of unique placeholders in the template"""
+    try:
+        # Create temporary directory
+        temp_dir = tempfile.mkdtemp()
+        
+        try:
+            # Extract document.xml from template
+            extract_dir = os.path.join(temp_dir, "extracted")
+            os.makedirs(extract_dir)
+            
+            with zipfile.ZipFile(template_path, 'r') as zip_ref:
+                zip_ref.extract('word/document.xml', extract_dir)
+            
+            # Read document.xml
+            document_xml_path = os.path.join(extract_dir, "word", "document.xml")
+            with open(document_xml_path, 'r', encoding='utf-8') as f:
+                xml_content = f.read()
+            
+            # Count unique placeholders
+            import re
+            code_placeholders = set(re.findall(r'\[code_\d+\]', xml_content))
+            sno_placeholders = set(re.findall(r'\[sno_\d+\]', xml_content))
+            unique_placeholders = code_placeholders.union(sno_placeholders)
+            
+            # Since each cell has two placeholders ([code_n] and [sno_n]),
+            # divide by 2 to get the number of cells
+            cells_per_page = len(unique_placeholders) // 2
+            
+            print(f"Detected {cells_per_page} cells per page in template")
+            return cells_per_page
+            
+        finally:
+            # Clean up temporary directory
+            try:
+                shutil.rmtree(temp_dir)
+            except:
+                pass
+                
+    except Exception as e:
+        print(f"Error counting placeholders in template: {e}")
+        return 0
+
+
 def process_vouchers(csv_path, template_path, output_path):
     """Main processing function"""
     
@@ -232,8 +276,11 @@ def process_vouchers(csv_path, template_path, output_path):
     if df is None:
         return False
     
-    # Define cells per page (14 as per the template structure)
-    cells_per_page = 14
+    # Dynamically determine cells per page by counting placeholders in template
+    cells_per_page = count_placeholders_in_template(template_path)
+    if cells_per_page <= 0:
+        print("Error: Could not determine number of cells per page from template")
+        return False
     
     # Calculate number of pages needed
     total_records = len(df)
